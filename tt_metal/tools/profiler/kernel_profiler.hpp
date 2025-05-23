@@ -391,6 +391,10 @@ struct profileScope {
                     quick_push();
                 }
             }
+
+            if (not bufferHasRoom<dispatch>()) {
+                quick_push();
+            }
         }
     }
 };

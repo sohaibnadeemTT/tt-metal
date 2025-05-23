@@ -106,6 +106,9 @@ void kernel_main() {
     uint64_t in0_mcast_receiver_semaphore_noc_addr =
         in0_multicast_data_noc | (uint64_t)in0_mcast_receiver_semaphore_addr;
 
+    {
+        DeviceZoneScopedN("TEST-FULL");
+    }
     noc_semaphore_set(in0_mcast_receiver_semaphore_addr_ptr, VALID);
 
     cb_reserve_back(cb_id_in2, batch * in0_block_num_tiles);
@@ -144,6 +147,9 @@ void kernel_main() {
                     // CB), we can have just the cores that produce work participate in receiving.
                     if constexpr (core_in_in0_receiver_mcast_grid) {
                         // Set in0 semaphore value to INVALID
+                        {
+                            DeviceZoneScopedN("TEST-FULL");
+                        }
                         noc_semaphore_set(in0_mcast_receiver_semaphore_addr_ptr, INVALID);
                     }
 
@@ -158,6 +164,9 @@ void kernel_main() {
                             uint64_t noc_shard_read_addr = get_noc_addr(in0_tensor_current_inner_dim_block_start_addr);
 
                             for (uint32_t i = 0; i < out_block_h; i++) {
+                                {
+                                    DeviceZoneScopedN("TEST-FULL");
+                                }
                                 noc_async_read(noc_shard_read_addr, l1_write_extract_shard_in0, shard_read_width);
                                 l1_write_extract_shard_in0 += shard_read_width;
                                 noc_shard_read_addr += shard_read_stride;
@@ -165,6 +174,9 @@ void kernel_main() {
 
                             in0_tensor_current_inner_dim_block_start_addr += shard_read_width;
 
+                            {
+                                DeviceZoneScopedN("TEST-FULL");
+                            }
                             noc_async_read_barrier();
                         } else {
                             in0_tensor_read_addr = in0_tensor_current_inner_dim_block_start_addr;
@@ -176,10 +188,19 @@ void kernel_main() {
                         // zero for the next block
                         if constexpr (core_in_in0_receiver_mcast_grid) {
                             // wait for every core in receiver grid EXCLUDING myself
+                            {
+                                DeviceZoneScopedN("TEST-FULL");
+                            }
                             noc_semaphore_wait(in0_mcast_sender_semaphore_addr_ptr, in0_mcast_num_dests - 1);
                         } else {
                             // wait for every core in receiver grid
+                            {
+                                DeviceZoneScopedN("TEST-FULL");
+                            }
                             noc_semaphore_wait(in0_mcast_sender_semaphore_addr_ptr, in0_mcast_num_dests);
+                        }
+                        {
+                            DeviceZoneScopedN("TEST-FULL");
                         }
                         noc_semaphore_set(in0_mcast_sender_semaphore_addr_ptr, 0);
 
@@ -193,6 +214,9 @@ void kernel_main() {
                                 // Skip if there are no other cores since this core already has the data.
                                 // Note: noc_async_write_multicast[_loopback_src] may hang if called with 0 cores.
                                 if constexpr (in0_mcast_num_cores > 1) {
+                                    {
+                                        DeviceZoneScopedN("TEST-FULL");
+                                    }
                                     noc_async_write_multicast(
                                         in0_tensor_read_addr,
                                         in0_multicast_data_addr,
@@ -206,10 +230,16 @@ void kernel_main() {
                             else {
                                 if constexpr (in0_mcast_num_cores == 1) {
                                     // noc_async_write if we only want to copy data between CB locally
+                                    {
+                                        DeviceZoneScopedN("TEST-FULL");
+                                    }
                                     noc_async_write(
                                         in0_tensor_read_addr, in0_multicast_data_addr, in0_block_size_bytes);
                                 } else {
                                     // multicast to every core in receiver grid
+                                    {
+                                        DeviceZoneScopedN("TEST-FULL");
+                                    }
                                     noc_async_write_multicast_loopback_src(
                                         in0_tensor_read_addr,
                                         in0_multicast_data_addr,
@@ -227,6 +257,9 @@ void kernel_main() {
                                 // Data needs to be written directly in the core.
                                 in0_mcast_receiver_semaphore_addr_ptr[0] = VALID;
                             } else {
+                                {
+                                    DeviceZoneScopedN("TEST-FULL");
+                                }
                                 noc_semaphore_set_multicast_loopback_src(
                                     in0_mcast_sender_semaphore_valid_addr,
                                     in0_mcast_receiver_semaphore_noc_addr,
@@ -235,6 +268,9 @@ void kernel_main() {
                         } else {
                             // If we are not part of receiver grid, always do a regular noc_async_write_multicast to all
                             // cores in receiver grid
+                            {
+                                DeviceZoneScopedN("TEST-FULL");
+                            }
                             noc_async_write_multicast(
                                 in0_tensor_read_addr,
                                 in0_multicast_data_addr,
@@ -244,6 +280,9 @@ void kernel_main() {
                                 true);
 
                             // We should also multicast the flag to destinations
+                            {
+                                DeviceZoneScopedN("TEST-FULL");
+                            }
                             noc_semaphore_set_multicast(
                                 in0_mcast_sender_semaphore_valid_addr,
                                 in0_mcast_receiver_semaphore_noc_addr,
@@ -256,6 +295,9 @@ void kernel_main() {
                         // On Blackhole the flush is needed because NoC latency is higher than L1 <-> RISCV latency
                         // which means data could be changed before
                         //  write is issued.
+                        {
+                            DeviceZoneScopedN("TEST-FULL");
+                        }
                         noc_async_writes_flushed();
 #endif
 
@@ -263,11 +305,17 @@ void kernel_main() {
                         uint64_t in0_mcast_sender_semaphore_noc_addr = remote_sender_noc_addrs[block_id];
 
                         // Atomic increment source core counter
+                        {
+                            DeviceZoneScopedN("TEST-FULL");
+                        }
                         noc_semaphore_inc(in0_mcast_sender_semaphore_noc_addr, 1);
                     }
 
                     if constexpr (core_in_in0_receiver_mcast_grid) {
                         // wait on in0 semaphore value to become VALID (set by mcast sender after it multicasts data)
+                        {
+                            DeviceZoneScopedN("TEST-FULL");
+                        }
                         noc_semaphore_wait(in0_mcast_receiver_semaphore_addr_ptr, VALID);
                     }
                     cb_push_back(cb_id_in0, in0_block_num_tiles);
@@ -285,5 +333,8 @@ void kernel_main() {
         }
     }
 
+    {
+        DeviceZoneScopedN("TEST-FULL");
+    }
     noc_async_write_barrier();
 }
